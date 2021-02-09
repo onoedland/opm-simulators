@@ -66,8 +66,6 @@
 #include "ecltracermodel.hh"
 #include "vtkecltracermodule.hh"
 
-#include <opm/core/props/satfunc/RelpermDiagnostics.hpp>
-
 #include <opm/models/utils/pffgridvector.hh>
 #include <opm/models/blackoil/blackoilmodel.hh>
 #include <opm/models/discretization/ecfv/ecfvdiscretization.hh>
@@ -841,9 +839,6 @@ public:
         maxTimeStepAfterWellEvent_ = EWOMS_GET_PARAM(TypeTag, Scalar, EclMaxTimeStepSizeAfterWellEvent);
         restartShrinkFactor_ = EWOMS_GET_PARAM(TypeTag, Scalar, EclRestartShrinkFactor);
         maxFails_ = EWOMS_GET_PARAM(TypeTag, unsigned, MaxTimeStepDivisions);
-
-        Opm::RelpermDiagnostics relpermDiagnostics;
-        relpermDiagnostics.diagnosis(vanguard.eclState(), vanguard.cartesianIndexMapper());
     }
 
     /*!
@@ -2735,6 +2730,8 @@ private:
             if (enablePolymer)
                  polymerConcentration_[elemIdx] = eclWriter_->eclOutputModule().getPolymerConcentration(elemIdx);
             // if we need to restart for polymer molecular weight simulation, we need to add related here
+            if (enablePolymerMolarWeight)
+                 polymerMoleWeight_[elemIdx] = eclWriter_->eclOutputModule().getPolymerMW(elemIdx);
         }
 
         const int episodeIdx = simulator.episodeIndex();

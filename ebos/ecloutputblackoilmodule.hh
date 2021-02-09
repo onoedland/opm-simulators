@@ -375,6 +375,8 @@ public:
             sSol_.resize(bufferSize, 0.0);
         if (getPropValue<TypeTag, Properties::EnablePolymer>())
             cPolymer_.resize(bufferSize, 0.0);
+        if (getPropValue<TypeTag, Properties::EnablePolymerMW>())
+            mwPolymer_.resize(bufferSize, 0.0);
         if (getPropValue<TypeTag, Properties::EnableFoam>())
             cFoam_.resize(bufferSize, 0.0);
         if (getPropValue<TypeTag, Properties::EnableBrine>())
@@ -643,6 +645,10 @@ public:
 
             if (cPolymer_.size() > 0) {
                 cPolymer_[globalDofIdx] = intQuants.polymerConcentration().value();
+            }
+
+            if (mwPolymer_.size() > 0) {
+                mwPolymer_[globalDofIdx] = intQuants.polymerMoleWeight().value();
             }
 
             if (cFoam_.size() > 0) {
@@ -1091,6 +1097,9 @@ public:
 
         if (cPolymer_.size() > 0)
             sol.insert ("POLYMER", Opm::UnitSystem::measure::identity, std::move(cPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+
+        if (mwPolymer_.size() > 0)
+            sol.insert ("POLY_MW", Opm::UnitSystem::measure::identity, std::move(mwPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
 
         if (cFoam_.size() > 0)
             sol.insert ("FOAM", Opm::UnitSystem::measure::identity, std::move(cFoam_), Opm::data::TargetType::RESTART_SOLUTION);
@@ -1744,6 +1753,8 @@ public:
             rv_[elemIdx] = sol.data("RV")[globalDofIndex];
         if (cPolymer_.size() > 0 && sol.has("POLYMER"))
             cPolymer_[elemIdx] = sol.data("POLYMER")[globalDofIndex];
+        if (mwPolymer_.size() > 0 && sol.has("POLY_MW"))
+            mwPolymer_[elemIdx] = sol.data("POLY_MW")[globalDofIndex];
         if (cFoam_.size() > 0 && sol.has("FOAM"))
             cFoam_[elemIdx] = sol.data("FOAM")[globalDofIndex];
         if (cSalt_.size() > 0 && sol.has("SALT"))
@@ -1839,6 +1850,14 @@ public:
     {
         if (cPolymer_.size() > elemIdx)
             return cPolymer_[elemIdx];
+
+        return 0;
+    }
+
+    Scalar getPolymerMW(unsigned elemIdx) const
+    {
+        if (mwPolymer_.size() > elemIdx)
+            return mwPolymer_[elemIdx];
 
         return 0;
     }
@@ -2344,6 +2363,7 @@ private:
     ScalarBuffer mFracGas_;
     ScalarBuffer mFracCo2_;
     ScalarBuffer cPolymer_;
+    ScalarBuffer mwPolymer_;
     ScalarBuffer cFoam_;
     ScalarBuffer cSalt_;
     ScalarBuffer soMax_;
