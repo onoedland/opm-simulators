@@ -376,7 +376,14 @@ public:
         if (getPropValue<TypeTag, Properties::EnablePolymer>())
             cPolymer_.resize(bufferSize, 0.0);
         if (getPropValue<TypeTag, Properties::EnablePolymerMW>())
+        {
             mwPolymer_.resize(bufferSize, 0.0);
+            effectivePolymerViscosityPolymer_.resize(bufferSize, 0.0);
+            effectiveMixtureViscosityPolymer_.resize(bufferSize, 0.0);
+            effectiveWaterViscosityPolymer_.resize(bufferSize, 0.0);
+            relativeViscosityPolymer_.resize(bufferSize, 0.0);
+            cellShearRate_.resize(bufferSize, 0.0);
+        }
         if (getPropValue<TypeTag, Properties::EnableFoam>())
             cFoam_.resize(bufferSize, 0.0);
         if (getPropValue<TypeTag, Properties::EnableBrine>())
@@ -649,6 +656,26 @@ public:
 
             if (mwPolymer_.size() > 0) {
                 mwPolymer_[globalDofIdx] = intQuants.polymerMoleWeight().value();
+            }
+
+            if (effectivePolymerViscosityPolymer_.size() > 0) {
+                effectivePolymerViscosityPolymer_[globalDofIdx] = intQuants.epvis().value();
+            }
+            
+            if (effectiveMixtureViscosityPolymer_.size() > 0) {
+                effectiveMixtureViscosityPolymer_[globalDofIdx] = intQuants.emvis().value();
+            }
+
+            if (effectiveWaterViscosityPolymer_.size() > 0) {
+                effectiveWaterViscosityPolymer_[globalDofIdx] = intQuants.ewvpol().value();
+            }
+            
+            if (relativeViscosityPolymer_.size() > 0) {
+                relativeViscosityPolymer_[globalDofIdx] = intQuants.polymerRelativeViscosity().value();
+            }
+            
+            if (cellShearRate_.size() > 0) {
+                cellShearRate_[globalDofIdx] = intQuants.shear().value();
             }
 
             if (cFoam_.size() > 0) {
@@ -1100,6 +1127,22 @@ public:
 
         if (mwPolymer_.size() > 0)
             sol.insert ("POLY_MW", Opm::UnitSystem::measure::identity, std::move(mwPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+
+        if (effectivePolymerViscosityPolymer_.size() > 0)
+            sol.insert ("EPVIS", Opm::UnitSystem::measure::identity, std::move(effectivePolymerViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+
+        if (effectiveMixtureViscosityPolymer_.size() > 0)
+            sol.insert ("EMVIS", Opm::UnitSystem::measure::identity, std::move(effectiveMixtureViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+
+        if (effectiveWaterViscosityPolymer_.size() > 0)
+            sol.insert ("EWV_POL", Opm::UnitSystem::measure::identity, std::move(effectiveWaterViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+
+        if (relativeViscosityPolymer_.size() > 0)
+            sol.insert ("ETA_REL", Opm::UnitSystem::measure::identity, std::move(relativeViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+        
+        if (cellShearRate_.size() > 0)
+            sol.insert ("SHEAR", Opm::UnitSystem::measure::identity, std::move(cellShearRate_), Opm::data::TargetType::RESTART_SOLUTION);
+
 
         if (cFoam_.size() > 0)
             sol.insert ("FOAM", Opm::UnitSystem::measure::identity, std::move(cFoam_), Opm::data::TargetType::RESTART_SOLUTION);
@@ -1755,6 +1798,18 @@ public:
             cPolymer_[elemIdx] = sol.data("POLYMER")[globalDofIndex];
         if (mwPolymer_.size() > 0 && sol.has("POLY_MW"))
             mwPolymer_[elemIdx] = sol.data("POLY_MW")[globalDofIndex];
+
+        if (effectivePolymerViscosityPolymer_.size() > 0 && sol.has("POLY_MW"))
+            effectivePolymerViscosityPolymer_[elemIdx] = sol.data("EPVIS")[globalDofIndex];
+        if (effectiveMixtureViscosityPolymer_.size() > 0 && sol.has("POLY_MW"))
+            effectiveMixtureViscosityPolymer_[elemIdx] = sol.data("EMVIS")[globalDofIndex];
+        if (effectiveWaterViscosityPolymer_.size() > 0 && sol.has("POLY_MW"))
+            effectiveWaterViscosityPolymer_[elemIdx] = sol.data("EWV_POL")[globalDofIndex];
+        if (relativeViscosityPolymer_.size() > 0 && sol.has("POLY_MW"))
+            relativeViscosityPolymer_[elemIdx] = sol.data("ETA_REL")[globalDofIndex];
+        if (cellShearRate_.size() > 0 && sol.has("POLY_MW"))
+            cellShearRate_[elemIdx] = sol.data("SHEAR")[globalDofIndex];
+        
         if (cFoam_.size() > 0 && sol.has("FOAM"))
             cFoam_[elemIdx] = sol.data("FOAM")[globalDofIndex];
         if (cSalt_.size() > 0 && sol.has("SALT"))
@@ -1858,6 +1913,47 @@ public:
     {
         if (mwPolymer_.size() > elemIdx)
             return mwPolymer_[elemIdx];
+
+        return 0;
+    }
+    
+    
+    Scalar getPolymerEffectiveMixtureViscosity(unsigned elemIdx) const
+    {
+        if (effectiveMixtureViscosityPolymer_.size() > elemIdx)
+            return effectiveMixtureViscosityPolymer_[elemIdx];
+
+        return 0;
+    }
+
+    Scalar getPolymerEffectivePolymerViscosity(unsigned elemIdx) const
+    {
+        if (effectivePolymerViscosityPolymer_.size() > elemIdx)
+            return effectivePolymerViscosityPolymer_[elemIdx];
+
+        return 0;
+    }
+    
+    Scalar getPolymerEffectiveWaterViscosity(unsigned elemIdx) const
+    {
+        if (effectiveWaterViscosityPolymer_.size() > elemIdx)
+            return effectiveWaterViscosityPolymer_[elemIdx];
+
+        return 0;
+    }
+    
+    Scalar getPolymerRelativeViscosity(unsigned elemIdx) const
+    {
+        if (relativeViscosityPolymer_.size() > elemIdx)
+            return relativeViscosityPolymer_[elemIdx];
+
+        return 0;
+    }
+    
+    Scalar getCellShearRate(unsigned elemIdx) const
+    {
+        if (cellShearRate_.size() > elemIdx)
+            return cellShearRate_[elemIdx];
 
         return 0;
     }
@@ -2364,6 +2460,14 @@ private:
     ScalarBuffer mFracCo2_;
     ScalarBuffer cPolymer_;
     ScalarBuffer mwPolymer_;
+    
+    // TO DO: Need to decide eventually which quantities to store, and give them proper names
+    ScalarBuffer effectivePolymerViscosityPolymer_;
+    ScalarBuffer effectiveMixtureViscosityPolymer_;
+    ScalarBuffer effectiveWaterViscosityPolymer_;
+    ScalarBuffer relativeViscosityPolymer_;
+    ScalarBuffer cellShearRate_;
+    
     ScalarBuffer cFoam_;
     ScalarBuffer cSalt_;
     ScalarBuffer soMax_;

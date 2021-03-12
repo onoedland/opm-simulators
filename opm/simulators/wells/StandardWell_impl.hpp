@@ -327,7 +327,6 @@ namespace Opm
 
 
 
-
     template<typename TypeTag>
     typename StandardWell<TypeTag>::EvalWell
     StandardWell<TypeTag>::
@@ -3384,7 +3383,32 @@ namespace Opm
     }
 
 
-
+    /* CRITICAL TO DO: Does this compile?? */
+    /*
+    template<typename TypeTag>
+    typename StandardWell<TypeTag>::EvalWell
+    StandardWell<TypeTag>::
+    wpolymerMechanicalDegradation(const EvalWell& water_velocity, Opm::DeferredLogger& deferred_logger) const
+    {
+        if (!this->has_polymermw) {
+            OPM_DEFLOG_THROW(std::runtime_error, "Polymermw is not activated, "
+                                          "but injected molecular weight of degraded polymer is requested for well " << name(), deferred_logger);
+        }
+        else if(!enablePolymerMechanicalDegradation){
+            OPM_DEFLOG_THROW(std::runtime_error, "Mechanical degradation model is not enabled, "
+                                          "but injected molecular weight of degraded polymer is requested for well " << name(), deferred_logger);
+        }
+        const EvalWell molecular_weight(numWellEq_ + numEq, 0.);
+        if (wpolymer() == 0.) { // not injecting polymer
+            return molecular_weight;
+        }
+        
+        //typedef Opm::RegulaFalsi<Opm::ThrowOnError> RootFinder;
+        // TO DO: Calculate injected Mw here..
+        // dMw/dr = -f(Mw)
+        
+    }
+    */
 
 
     template<typename TypeTag>
@@ -3607,7 +3631,6 @@ namespace Opm
             }
         }
     }
-
 
 
 

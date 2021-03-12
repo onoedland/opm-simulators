@@ -88,6 +88,8 @@ namespace Opm
         using PolymerModule =  Opm::BlackOilPolymerModule<TypeTag>;
         using FoamModule = Opm::BlackOilFoamModule<TypeTag>;
         using BrineModule = Opm::BlackOilBrineModule<TypeTag>;
+        
+        static constexpr bool enablePolymerMechanicalDegradation = getPropValue<TypeTag, Properties::EnablePolymerMechanicalDegradation>();
 
         static const int numSolventEq = Indices::numSolvents;
 
@@ -595,6 +597,9 @@ namespace Opm
         EvalWell wpolymermw(const double throughput,
                             const EvalWell& water_velocity,
                             Opm::DeferredLogger& deferred_logger) const;
+                            
+        // calculate injected polymer molecular weight using mechanical degradation model similar to IORCoreSim
+        EvalWell wpolymerMechanicalDegradation(const EvalWell& water_velocity, Opm::DeferredLogger& deferred_logger) const;                 
 
         // modify the water rate for polymer injectivity study
         void handleInjectivityRate(const Simulator& ebosSimulator,

@@ -25,7 +25,6 @@
 
 int main(int argc, char** argv)
 {
-    std::cout << "This is just a test..." << std::endl;
     auto mainObject = Opm::Main(argc, argv);
     return mainObject.runDynamic();
 }

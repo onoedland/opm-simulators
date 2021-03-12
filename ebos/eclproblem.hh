@@ -2731,7 +2731,9 @@ private:
                  polymerConcentration_[elemIdx] = eclWriter_->eclOutputModule().getPolymerConcentration(elemIdx);
             // if we need to restart for polymer molecular weight simulation, we need to add related here
             if (enablePolymerMolarWeight)
-                 polymerMoleWeight_[elemIdx] = eclWriter_->eclOutputModule().getPolymerMW(elemIdx);
+            {
+                polymerMoleWeight_[elemIdx] = eclWriter_->eclOutputModule().getPolymerMW(elemIdx);
+            }
         }
 
         const int episodeIdx = simulator.episodeIndex();
@@ -2975,8 +2977,9 @@ private:
         if (enablePolymerMolarWeight) {
             if (eclState.fieldProps().has_double("SPOLYMW"))
                 polymerMoleWeight_ = eclState.fieldProps().get_double("SPOLYMW");
-            else
+            else{
                 polymerMoleWeight_.resize(numDof, 0.0);
+            }
         }
     }
 
