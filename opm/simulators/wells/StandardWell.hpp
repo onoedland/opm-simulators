@@ -597,9 +597,6 @@ namespace Opm
         EvalWell wpolymermw(const double throughput,
                             const EvalWell& water_velocity,
                             Opm::DeferredLogger& deferred_logger) const;
-                            
-        // calculate injected polymer molecular weight using mechanical degradation model similar to IORCoreSim
-        EvalWell wpolymerMechanicalDegradation(const EvalWell& water_velocity, Opm::DeferredLogger& deferred_logger) const;                 
 
         // modify the water rate for polymer injectivity study
         void handleInjectivityRate(const Simulator& ebosSimulator,
@@ -614,6 +611,19 @@ namespace Opm
                                         Opm::DeferredLogger& deferred_logger);
 
         virtual void updateWaterThroughput(const double dt, WellState& well_state) const override;
+        
+        // calculate injected polymer molecular weight using ODE-based mechanical degradation model
+        EvalWell wpolymerMechanicalDegradation(const double throughput, // <-- to do: remove this variable as input
+                                               const EvalWell& water_velocity, 
+                                               Opm::DeferredLogger& deferred_logger) const;
+                                               
+    
+        // handle extra equation(s) for ODE-based mechanical degradation model
+        void handleMechanicalDegradationEquations(const Simulator& ebosSimulator,
+                                                  const WellState& well_state,
+                                                  const int perf,
+                                                  const EvalWell& water_flux_s,
+                                                  Opm::DeferredLogger& deferred_logger);
 
         // checking the convergence of the well control equations
         void checkConvergenceControlEq(const WellState& well_state,
