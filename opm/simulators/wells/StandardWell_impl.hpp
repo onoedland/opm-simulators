@@ -544,7 +544,7 @@ namespace Opm
         const EvalWell well_pressure = bhp + perf_pressure_diffs_[perf];
         EvalWell drawdown = pressure - well_pressure;
 
-        if (this->has_polymermw && this->isInjector()) {
+        if (this->has_polymermw && this->isInjector() && !enablePolymerMechanicalDegradation) {
             const int pskin_index = Bhp + 1 + number_of_perforations_ + perf;
             const EvalWell& skin_pressure = primary_variables_evaluation_[pskin_index];
             drawdown += skin_pressure;
@@ -3545,21 +3545,35 @@ namespace Opm
                                           "but injected molecular weight of degraded polymer is requested for well " << name(), deferred_logger);
         }
         
+        
+        
         const int table_id = well_ecl_.getPolymerProperties().m_plymwinjtable;
         const auto& table_func = PolymerModule::getPlymwinjTable(table_id);
         const EvalWell throughput_eval(numWellEq_ + numEq, throughput);
         EvalWell molecular_weight(numWellEq_ + numEq, 0.);
         
+        
+        
+
+        EvalWell injected_molecular_weight(numWellEq_ + numEq, 0.);
         if (wpolymer() == 0.) { // not injecting polymer
-            return molecular_weight;
+            return injected_molecular_weight;
         }
         
-        molecular_weight = table_func.eval(throughput_eval, Opm::abs(water_velocity));
         
-        // TO DO: Stuff to get hold off from elsewhere....!!
+        molecular_weight = table_func.eval(throughput_eval, Opm::abs(water_velocity));
+        //return molecular_weight;
+
+        injected_molecular_weight = EvalWell(numWellEq_ + numEq, 20000.); // kg/mol = 1000*input value
+        //return 1.0e-3*injected_molecular_weight;
+        
+        const EvalWell absWellVelocity = Opm::abs(water_velocity); // Question: What if k, phi, Sw, krw == 0 ??
+        
+        // TO DO: Read this data from somewhere else...
         const Scalar temperature = 20.0 + 273.15;     
         const Scalar porosity = 0.2;
         const Scalar absPermWell = 100.0e-15/1.01325; // 100 mD
+        const Scalar well_radius = 0.1;
         
         /* Degradation model parameters */
         const EvalWell degr_rate_constant(numWellEq_ + numEq, 1.5e-6);
@@ -3573,6 +3587,7 @@ namespace Opm
         // Question: Which values should be of type "EvalWell" ??
         EvalWell polymerConcentration(numWellEq_ + numEq, 0.0);
         polymerConcentration.setValue(wpolymer());
+        
         const EvalWell muWater(numWellEq_ + numEq, 1.0e-3);
         const EvalWell Sw(numWellEq_ + numEq, 1.0);
         const EvalWell relWater(numWellEq_ + numEq, 1.0);
@@ -3581,50 +3596,33 @@ namespace Opm
         const EvalWell rwp_denominator = Sw*porosity;
         const EvalWell effective_pore_radius = Opm::sqrt(rwp_numerator / rwp_denominator);
 
-        // Question: What if either k, phi, Sw, or relWater == 0 ?
-        const EvalWell absWellVelocity = Opm::abs(water_velocity);
-
         const EvalWell shear_well = PolymerModule::computeWellShearRate(absWellVelocity,
                                                                         absPermWell,
                                                                         porosity,
                                                                         Sw,
                                                                         relWater,
                                                                         2.0);  // <-- alpha factor
+                                                                        
+        //std::cout << "rwell=" << well_radius << ", vel=" << absWellVelocity << ", Shear_well=" << shear_well << "\n";
  
 
-        const Scalar well_radius = 0.1; // TO DO: Get hold of well radius...
         const EvalWell degr_rate_constant_prefactor = porosity * Opm::pow(well_radius*absWellVelocity, -1.0);
         
-        /*
-        std::cout << "well_radius=" << well_radius << ", absWellVelocity=" << absWellVelocity << ", degr_prefactor=" << degr_rate_constant_prefactor << "\n";
-        std::cout << "well_velocity=" << absWellVelocity << ", k=" << absPermWell;
-        std::cout << ", cpol=" << polymerConcentration << ", phi=" << porosity;
-        std::cout << ", Rpore=" << 1.0e6*effective_pore_radius << " um" << ", Sw=" << Sw;
-        std::cout << ", muWater=" << 1.0e3*muWater << " mPas, krw=" << relWater << "\n";
-        std::cout << "----> Well shear rate: " << shear_well << " 1/s.\n";
-        std::cout << "Pre-factor:" << degr_rate_constant_prefactor << "\n";
-        std::cout << "Shear well:\n";
-        shear_well.print();
-        std::cout << "\n";
-        */
-        
-    
-    /* Calculates right-hand side of ODE dMw/dr = -f(Mw, r). */
-    auto f_dMw_dr = [degr_rate_constant,
-                     degr_alpha,
-                     degr_beta,
-                     degr_rate_constant_prefactor,
-                     effective_pore_radius,
-                     well_radius,
-                     polymerConcentration,
-                     muWater,
-                     porosity,
-                     temperature,
-                     Sw,
-                     relWater,
-                     shear_well]
-                     (const EvalWell Mw, const Scalar r) // Mw in kg/mol
-    {
+        /* Calculates right-hand side of ODE dMw/dr = -f(Mw, r). */
+        auto f_dMw_dr = [degr_rate_constant,
+                         degr_alpha,
+                         degr_beta,
+                         degr_rate_constant_prefactor,
+                         effective_pore_radius,
+                         well_radius,
+                         polymerConcentration,
+                         muWater,
+                         porosity,
+                         temperature,
+                         Sw,
+                         relWater,
+                         shear_well]
+                         (const EvalWell Mw, const Scalar r) {  // Note: Mw is in kg/mol here, while input Mw is in MDa
         
         const EvalWell pre_factor = r*degr_rate_constant_prefactor;
         const EvalWell shear_r = shear_well*well_radius / r;  // 1/sec
@@ -3694,7 +3692,9 @@ namespace Opm
         };
         
         const EvalWell max_Mw(initial_Mw);
-        const EvalWell min_Mw = max_Mw / (1.0 - dr*max_Mw*f_dMw_dr(max_Mw, radius));
+        //const EvalWell min_Mw = max_Mw / (1.0 - dr*max_Mw*f_dMw_dr(max_Mw, radius));
+        // CRITICAL TO DO: This might be wrong ?!?
+        const EvalWell min_Mw = max_Mw / (1.0 - dr*f_dMw_dr(max_Mw, radius)); // <--- TO DO: This might be wrong ?!?
 
         const int max_iter = 100;
         const double tolerance = 1.0e-9;
@@ -3705,14 +3705,13 @@ namespace Opm
     };
     
     // ==========================================================================================================
-    EvalWell injected_Mw(numWellEq_ + numEq, 20000.0);
-    
+    // TO DO: Clean up the solver.. Even better, move it to opm-common ??
     const Scalar omega = 0.9;
     const Scalar rel_tol = 1.0e-4;
     const Scalar abs_tol = 1.0e-5;
 
     std::vector<Scalar> solution_radii = {well_radius};
-    std::vector<EvalWell> solution_molecular_weights = {injected_Mw};
+    std::vector<EvalWell> solution_molecular_weights = {injected_molecular_weight};
 
     Scalar current_radius = well_radius;
     const Scalar final_radius = 19.9; // ext_radius;
@@ -3747,18 +3746,19 @@ namespace Opm
            
            noSteps += 3;
        }
-       const EvalWell next_Mw = 2*Mw_two_small_steps - Mw_one_large_step;
+       const EvalWell next_Mw = 2.0*Mw_two_small_steps - Mw_one_large_step;
        current_radius += stepsize;
        
        solution_radii.push_back(current_radius);
        solution_molecular_weights.push_back(next_Mw);
        //std::cout << "Solution at " << current_radius << ": " << next_Mw << "\n";
     }
-    const auto degraded_molecular_weight = solution_molecular_weights.back();
-    std::cout << "Solution with Richardson extrapolation: " << degraded_molecular_weight << " (" << noSteps << " steps)\n";
-    // ==========================================================================================================
-    //return degraded_molecular_weight;
-    return molecular_weight;
+    const EvalWell degraded_molecular_weight = 1.0e-3*solution_molecular_weights.back(); // kg/mol --> MDa
+    std::cout << "Solution with Richardson extrapolation: (" << noSteps << " steps)\n";
+    degraded_molecular_weight.print();
+    std::cout << "\n";
+
+    return degraded_molecular_weight;
         
     }
 
