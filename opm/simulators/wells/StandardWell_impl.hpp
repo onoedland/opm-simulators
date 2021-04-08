@@ -3545,24 +3545,17 @@ namespace Opm
                                           "but injected molecular weight of degraded polymer is requested for well " << name(), deferred_logger);
         }
         
-        
-        
         const int table_id = well_ecl_.getPolymerProperties().m_plymwinjtable;
         const auto& table_func = PolymerModule::getPlymwinjTable(table_id);
         const EvalWell throughput_eval(numWellEq_ + numEq, throughput);
         EvalWell molecular_weight(numWellEq_ + numEq, 0.);
-        
-        
-        
 
         EvalWell injected_molecular_weight(numWellEq_ + numEq, 0.);
         if (wpolymer() == 0.) { // not injecting polymer
             return injected_molecular_weight;
         }
         
-        
-        molecular_weight = table_func.eval(throughput_eval, Opm::abs(water_velocity));
-        //return molecular_weight;
+        molecular_weight = table_func.eval(throughput_eval, Opm::abs(water_velocity)); // TO DO: should remove this..
 
         injected_molecular_weight = EvalWell(numWellEq_ + numEq, 20000.); // kg/mol = 1000*input value
         //return 1.0e-3*injected_molecular_weight;
@@ -3576,6 +3569,7 @@ namespace Opm
         const Scalar well_radius = 0.1;
         
         /* Degradation model parameters */
+        // TO DO: Make these Scalars..
         const EvalWell degr_rate_constant(numWellEq_ + numEq, 1.5e-6);
         const EvalWell degr_alpha(numWellEq_ + numEq, 3.0);
         const EvalWell degr_beta(numWellEq_ + numEq, 1.0);
@@ -3754,9 +3748,9 @@ namespace Opm
        //std::cout << "Solution at " << current_radius << ": " << next_Mw << "\n";
     }
     const EvalWell degraded_molecular_weight = 1.0e-3*solution_molecular_weights.back(); // kg/mol --> MDa
-    std::cout << "Solution with Richardson extrapolation: (" << noSteps << " steps)\n";
-    degraded_molecular_weight.print();
-    std::cout << "\n";
+    //std::cout << "Solution with Richardson extrapolation: (" << noSteps << " steps)\n";
+    //degraded_molecular_weight.print();
+    //std::cout << "\n";
 
     return degraded_molecular_weight;
         
