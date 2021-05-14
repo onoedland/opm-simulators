@@ -373,16 +373,21 @@ public:
 
         if (getPropValue<TypeTag, Properties::EnableSolvent>())
             sSol_.resize(bufferSize, 0.0);
-        if (getPropValue<TypeTag, Properties::EnablePolymer>())
+        if (getPropValue<TypeTag, Properties::EnablePolymer>()){
             cPolymer_.resize(bufferSize, 0.0);
-        if (getPropValue<TypeTag, Properties::EnablePolymerMW>())
-        {
-            mwPolymer_.resize(bufferSize, 0.0);
             effectivePolymerViscosityPolymer_.resize(bufferSize, 0.0);
             effectiveMixtureViscosityPolymer_.resize(bufferSize, 0.0);
             effectiveWaterViscosityPolymer_.resize(bufferSize, 0.0);
+        }
+        if (getPropValue<TypeTag, Properties::EnablePolymerMW>())
+        {
+            mwPolymer_.resize(bufferSize, 0.0);
             relativeViscosityPolymer_.resize(bufferSize, 0.0);
             cellShearRate_.resize(bufferSize, 0.0);
+            // TO DO: this will probably be removed for the POLYMW model...??
+            effectivePolymerViscosityPolymer_.resize(bufferSize, 0.0);
+            effectiveMixtureViscosityPolymer_.resize(bufferSize, 0.0);
+            effectiveWaterViscosityPolymer_.resize(bufferSize, 0.0);
         }
         if (getPropValue<TypeTag, Properties::EnableFoam>())
             cFoam_.resize(bufferSize, 0.0);
@@ -1129,13 +1134,13 @@ public:
             sol.insert ("POLY_MW", Opm::UnitSystem::measure::identity, std::move(mwPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
 
         if (effectivePolymerViscosityPolymer_.size() > 0)
-            sol.insert ("EPVIS", Opm::UnitSystem::measure::identity, std::move(effectivePolymerViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+            sol.insert ("EPVIS", Opm::UnitSystem::measure::viscosity, std::move(effectivePolymerViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
 
         if (effectiveMixtureViscosityPolymer_.size() > 0)
-            sol.insert ("EMVIS", Opm::UnitSystem::measure::identity, std::move(effectiveMixtureViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+            sol.insert ("EMVIS", Opm::UnitSystem::measure::viscosity, std::move(effectiveMixtureViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
 
         if (effectiveWaterViscosityPolymer_.size() > 0)
-            sol.insert ("EWV_POL", Opm::UnitSystem::measure::identity, std::move(effectiveWaterViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
+            sol.insert ("EWV_POL", Opm::UnitSystem::measure::viscosity, std::move(effectiveWaterViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
 
         if (relativeViscosityPolymer_.size() > 0)
             sol.insert ("ETA_REL", Opm::UnitSystem::measure::identity, std::move(relativeViscosityPolymer_), Opm::data::TargetType::RESTART_SOLUTION);
@@ -1799,12 +1804,15 @@ public:
         if (mwPolymer_.size() > 0 && sol.has("POLY_MW"))
             mwPolymer_[elemIdx] = sol.data("POLY_MW")[globalDofIndex];
 
-        if (effectivePolymerViscosityPolymer_.size() > 0 && sol.has("POLY_MW"))
+
+        if (effectivePolymerViscosityPolymer_.size() > 0) // && sol.has("POLY_MW"))
             effectivePolymerViscosityPolymer_[elemIdx] = sol.data("EPVIS")[globalDofIndex];
-        if (effectiveMixtureViscosityPolymer_.size() > 0 && sol.has("POLY_MW"))
+        if (effectiveMixtureViscosityPolymer_.size() > 0) // && sol.has("POLY_MW"))
             effectiveMixtureViscosityPolymer_[elemIdx] = sol.data("EMVIS")[globalDofIndex];
-        if (effectiveWaterViscosityPolymer_.size() > 0 && sol.has("POLY_MW"))
+        if (effectiveWaterViscosityPolymer_.size() > 0) // && sol.has("POLY_MW"))
             effectiveWaterViscosityPolymer_[elemIdx] = sol.data("EWV_POL")[globalDofIndex];
+        
+        
         if (relativeViscosityPolymer_.size() > 0 && sol.has("POLY_MW"))
             relativeViscosityPolymer_[elemIdx] = sol.data("ETA_REL")[globalDofIndex];
         if (cellShearRate_.size() > 0 && sol.has("POLY_MW"))

@@ -612,10 +612,27 @@ namespace Opm
 
         virtual void updateWaterThroughput(const double dt, WellState& well_state) const override;
         
-        // calculate injected polymer molecular weight using ODE-based mechanical degradation model
-        EvalWell wpolymerMechanicalDegradation(const double throughput, // <-- to do: remove this variable as input
-                                               const EvalWell& water_velocity, 
-                                               Opm::DeferredLogger& deferred_logger) const;
+        // calculate injected polymer molecular weight using ODE-based mechanical degradation model (time-dependent)
+        EvalWell wpolymerMechanicalDegradationDT(const double well_radius, 
+                                                 const Scalar& temperature,
+                                                 const Scalar& permeability,
+                                                 const Scalar& porosity,
+                                                 const EvalWell& muWater,
+                                                 const EvalWell& relWater,
+                                                 const EvalWell& Sw,
+                                                 const EvalWell& water_velocity, 
+                                                 Opm::DeferredLogger& deferred_logger) const;
+                                  
+        // calculate injected polymer molecular weight using ODE-based mechanical degradation model (steady-state based)
+        EvalWell wpolymerMechanicalDegradationSteadyState(const double well_radius,
+                                                          const Scalar& temperature,
+                                                          const Scalar& permeability,
+                                                          const Scalar& porosity,
+                                                          const EvalWell& muWater,
+                                                          const EvalWell& relWater,
+                                                          const EvalWell& Sw,
+                                                          const EvalWell& water_velocity, 
+                                                          Opm::DeferredLogger& deferred_logger) const;
                                                
     
         // handle extra equation(s) for ODE-based mechanical degradation model
@@ -637,6 +654,7 @@ namespace Opm
         // updating the connectionRates_ related polymer molecular weight
         void updateConnectionRatePolyMW(const EvalWell& cq_s_poly,
                                         const IntensiveQuantities& int_quants,
+                                        const Simulator& ebosSimulator,
                                         const WellState& well_state,
                                         const int perf,
                                         std::vector<RateVector>& connectionRates,

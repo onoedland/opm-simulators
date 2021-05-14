@@ -68,6 +68,8 @@
 #include <vector>
 #include <algorithm>
 
+#include <caliper/cali.h>
+
 namespace Opm::Properties {
 
 namespace TTag {
@@ -228,6 +230,8 @@ namespace Opm {
         /// \param[in] timer                  simulation timer
         SimulatorReportSingle prepareStep(const SimulatorTimerInterface& timer)
         {
+            CALI_CXX_MARK_FUNCTION;
+            
             SimulatorReportSingle report;
             Dune::Timer perfTimer;
             perfTimer.start();
@@ -402,6 +406,8 @@ namespace Opm {
         /// \param[in] timer                  simulation timer
         SimulatorReportSingle afterStep(const SimulatorTimerInterface& timer OPM_UNUSED)
         {
+            CALI_CXX_MARK_FUNCTION;
+            
             SimulatorReportSingle report;
             Dune::Timer perfTimer;
             perfTimer.start();
@@ -429,6 +435,8 @@ namespace Opm {
         // compute the "relative" change of the solution between time steps
         double relativeChange() const
         {
+            CALI_CXX_MARK_FUNCTION;
+            
             Scalar resultDelta = 0.0;
             Scalar resultDenom = 0.0;
 
@@ -521,7 +529,8 @@ namespace Opm {
         /// r is the residual.
         void solveJacobianSystem(BVector& x)
         {
-
+            CALI_CXX_MARK_FUNCTION;
+            
             auto& ebosJac = ebosSimulator_.model().linearizer().jacobian();
             auto& ebosResid = ebosSimulator_.model().linearizer().residual();
 
@@ -547,6 +556,8 @@ namespace Opm {
         /// Apply an update to the primary variables.
         void updateSolution(const BVector& dx)
         {
+            CALI_CXX_MARK_FUNCTION;
+            
             auto& ebosNewtonMethod = ebosSimulator_.model().newtonMethod();
             SolutionVector& solution = ebosSimulator_.model().solution(/*timeIdx=*/0);
 
@@ -768,6 +779,8 @@ namespace Opm {
                                                   std::vector<Scalar>& B_avg,
                                                   std::vector<Scalar>& residual_norms)
         {
+            CALI_CXX_MARK_FUNCTION;
+            
             typedef std::vector< Scalar > Vector;
 
             const int numComp = numEq;

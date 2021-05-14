@@ -446,3 +446,9 @@ endif()
 if(OpenCL_FOUND)
   target_link_libraries( opmsimulators ${OpenCL_LIBRARIES} )
 endif()
+
+set(CALIPER_INCLUDE_DIR "/mnt/c/Users/2904704/cpp_libs/caliper/include")
+include_directories(opmsimulators PUBLIC ${CALIPER_INCLUDE_DIR})
+
+set(CALIPER_LIB "/mnt/c/Users/2904704/cpp_libs/caliper/lib/libcaliper.so.2")
+target_link_libraries( opmsimulators PUBLIC ${CALIPER_LIB} )
