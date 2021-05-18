@@ -375,19 +375,17 @@ public:
             sSol_.resize(bufferSize, 0.0);
         if (getPropValue<TypeTag, Properties::EnablePolymer>()){
             cPolymer_.resize(bufferSize, 0.0);
-            effectivePolymerViscosityPolymer_.resize(bufferSize, 0.0);
-            effectiveMixtureViscosityPolymer_.resize(bufferSize, 0.0);
-            effectiveWaterViscosityPolymer_.resize(bufferSize, 0.0);
-        }
-        if (getPropValue<TypeTag, Properties::EnablePolymerMW>())
-        {
-            mwPolymer_.resize(bufferSize, 0.0);
-            relativeViscosityPolymer_.resize(bufferSize, 0.0);
-            cellShearRate_.resize(bufferSize, 0.0);
-            // TO DO: this will probably be removed for the POLYMW model...??
-            effectivePolymerViscosityPolymer_.resize(bufferSize, 0.0);
-            effectiveMixtureViscosityPolymer_.resize(bufferSize, 0.0);
-            effectiveWaterViscosityPolymer_.resize(bufferSize, 0.0);
+            if (getPropValue<TypeTag, Properties::EnablePolymerMW>())
+            {
+                mwPolymer_.resize(bufferSize, 0.0);
+                relativeViscosityPolymer_.resize(bufferSize, 0.0);
+                cellShearRate_.resize(bufferSize, 0.0);
+            }
+            else{
+                    effectivePolymerViscosityPolymer_.resize(bufferSize, 0.0);
+                    effectiveMixtureViscosityPolymer_.resize(bufferSize, 0.0);
+                    effectiveWaterViscosityPolymer_.resize(bufferSize, 0.0);
+                }
         }
         if (getPropValue<TypeTag, Properties::EnableFoam>())
             cFoam_.resize(bufferSize, 0.0);
