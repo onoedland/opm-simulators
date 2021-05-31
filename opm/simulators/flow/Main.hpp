@@ -23,6 +23,9 @@
 #define OPM_MAIN_HEADER_INCLUDED
 
 #include <flow/flow_ebos_blackoil.hpp>
+// onoedland: Also build polymer module (incl. POLYMW option)
+#include <flow/flow_ebos_oilwater_polymer.hpp>
+#include <flow/flow_ebos_oilwater_polymer_injectivity.hpp>
 
 # ifndef FLOW_BLACKOIL_ONLY
 #  include <flow/flow_ebos_gasoil.hpp>
@@ -61,6 +64,7 @@
 
 #if HAVE_MPI
 #include <opm/simulators/utils/ParallelEclipseState.hpp>
+#include <opm/simulators/utils/ParallelSerialization.hpp>
 #endif
 
 #include <string>
@@ -155,7 +159,8 @@ namespace Opm
         {
             int exitCode = EXIT_SUCCESS;
             if (initialize_<Properties::TTag::FlowEarlyBird>(exitCode)) {
-                return dispatchDynamic_();
+                //return dispatchDynamic_();
+                return dispatchDynamic_polymer_only_(); // onoedland: for reducing compilation times when developing
             } else {
                 return exitCode;
             }
@@ -197,6 +202,51 @@ namespace Opm
         }
 
     private:
+
+        // onoedland: temporary function used to only include polymer...
+        int dispatchDynamic_polymer_only_()
+        {
+           const auto& phases = eclipseState_->runspec().phases();
+
+           // Polymer case
+           if ( phases.active( Opm::Phase::POLYMER ) ) {
+                if ( !phases.active( Opm::Phase::WATER) ) {
+                    if (outputCout_)
+                        std::cerr << "No valid configuration is found for polymer simulation, valid options include "
+                                  << "oilwater + polymer and blackoil + polymer" << std::endl;
+                    return EXIT_FAILURE;
+                }
+
+                // Need to track the polymer molecular weight
+                // for the injectivity study
+                if ( phases.active( Opm::Phase::POLYMW ) ) {
+                    // only oil water two phase for now
+                    assert( phases.size() == 4);
+                    return Opm::flowEbosOilWaterPolymerInjectivityMain(argc_, argv_, outputCout_, outputFiles_);
+                }
+
+                if ( phases.size() == 3 ) { // oil water polymer case
+                    Opm::flowEbosOilWaterPolymerSetDeck(setupTime_, std::move(deck_),
+                                                        std::move(eclipseState_),
+                                                        std::move(schedule_),
+                                                        std::move(summaryConfig_));
+                    return Opm::flowEbosOilWaterPolymerMain(argc_, argv_, outputCout_, outputFiles_);
+                } else {
+                    Opm::flowEbosPolymerSetDeck(setupTime_, std::move(deck_),
+                                                std::move(eclipseState_),
+                                                std::move(schedule_),
+                                                std::move(summaryConfig_));
+                    return Opm::flowEbosPolymerMain(argc_, argv_, outputCout_, outputFiles_);
+                }
+            }
+            else {
+                if (outputCout_)
+                    std::cerr << "No suitable configuration found, valid are Twophase, polymer, foam, brine, solvent, energy, blackoil." << std::endl;
+                return EXIT_FAILURE;
+            }
+
+        } // end dispatchDynamic_polymer_only()
+
         int dispatchDynamic_()
         {
             const auto& phases = eclipseState_->runspec().phases();

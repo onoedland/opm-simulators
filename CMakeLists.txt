@@ -303,8 +303,12 @@ set_property(TARGET moduleVersion PROPERTY POSITION_INDEPENDENT_CODE ON)
 # but this is not exposed in a super-build.
 add_dependencies(moduleVersion opmsimulators)
 
-set(COMMON_MODELS brine energy extbo foam gasoil gaswater oilwater oilwater_polymer polymer solvent)
-set(FLOW_MODELS   blackoil oilwater_brine oilwater_polymer_injectivity)
+#set(COMMON_MODELS brine energy extbo foam gasoil gaswater oilwater oilwater_polymer polymer solvent)
+#set(FLOW_MODELS   blackoil oilwater_brine oilwater_polymer_injectivity)
+
+# Only compile polymer options for now:
+set(COMMON_MODELS oilwater_polymer polymer)
+set(FLOW_MODELS blackoil oilwater_polymer_injectivity)
 
 set(FLOW_TGTS)
 foreach(OBJ ${COMMON_MODELS} ${FLOW_MODELS})
