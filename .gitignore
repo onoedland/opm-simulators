@@ -41,3 +41,5 @@ build/
 
 # emacs directory setting:
 .dir-locals.el
+
+cmake-build-debug
