@@ -204,7 +204,11 @@ protected:
     { asImp_().updateVolumeFluxTrans(elemCtx, scvfIdx, timeIdx); }
 
     void updatePolymer(const ElementContext& elemCtx, unsigned scvfIdx, unsigned timeIdx)
-    { asImp_().updateShearMultipliers(elemCtx, scvfIdx, timeIdx); }
+    {
+        asImp_().updateShearMultipliers(elemCtx, scvfIdx, timeIdx);
+        // Only relevant for POLYMW models:
+        asImp_().calculateCellBasedInSituShearRate(elemCtx, scvfIdx, timeIdx);
+    }
 
     /*!
      * \brief Update the required gradients for interior faces
