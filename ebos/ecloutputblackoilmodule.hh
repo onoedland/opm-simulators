@@ -308,10 +308,6 @@ public:
                 this->cPolymer_[globalDofIdx] = intQuants.polymerConcentration().value();
             }
 
-            if (!this->mwPolymer_.empty()) {
-                this->mwPolymer_[globalDofIdx] = intQuants.polymerMoleWeight().value();
-            }
-
             if (!this->effectivePolymerViscosityPolymer_.empty()) {
                 this->effectivePolymerViscosityPolymer_[globalDofIdx] = intQuants.epvis().value();
             }
@@ -322,6 +318,18 @@ public:
 
             if (!this->effectiveWaterViscosityPolymer_.empty()) {
                 this->effectiveWaterViscosityPolymer_[globalDofIdx] = intQuants.ewv_pol().value();
+            }
+
+            if (!this->mwPolymer_.empty()) {
+                this->mwPolymer_[globalDofIdx] = intQuants.polymerMoleWeight().value();
+            }
+
+            if (!this->apparentViscosityPolymer_.empty()) {
+                this->apparentViscosityPolymer_[globalDofIdx] = intQuants.polymerApparentViscosity().value();
+            }
+
+            if (!this->cellShearRatePolymer_.empty()) {
+                this->cellShearRatePolymer_[globalDofIdx] = intQuants.polymerInSituShearRate().value();
             }
 
             if (!this->cFoam_.empty()) {

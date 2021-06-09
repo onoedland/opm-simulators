@@ -662,9 +662,6 @@ assignToSolution(data::Solution& sol)
     if (!cPolymer_.empty())
         sol.insert ("POLYMER", UnitSystem::measure::identity, std::move(cPolymer_), data::TargetType::RESTART_SOLUTION);
 
-    if (!mwPolymer_.empty())
-        sol.insert ("POLY_MW", UnitSystem::measure::identity, std::move(mwPolymer_), data::TargetType::RESTART_SOLUTION);
-
     if (!effectivePolymerViscosityPolymer_.empty())
         sol.insert ("EPVIS", UnitSystem::measure::viscosity, std::move(effectivePolymerViscosityPolymer_), data::TargetType::RESTART_SOLUTION);
 
@@ -673,6 +670,15 @@ assignToSolution(data::Solution& sol)
 
     if (!effectiveWaterViscosityPolymer_.empty())
         sol.insert ("EWV_POL", UnitSystem::measure::viscosity, std::move(effectiveWaterViscosityPolymer_), data::TargetType::RESTART_SOLUTION);
+
+    if (!mwPolymer_.empty())
+        sol.insert ("POLY_MW", UnitSystem::measure::identity, std::move(mwPolymer_), data::TargetType::RESTART_SOLUTION);
+
+    if (!cellShearRatePolymer_.empty())
+        sol.insert ("POLSHEAR", UnitSystem::measure::identity, std::move(cellShearRatePolymer_), data::TargetType::RESTART_SOLUTION);
+
+    if (!apparentViscosityPolymer_.empty())
+        sol.insert ("PAPPVISC", UnitSystem::measure::viscosity, std::move(apparentViscosityPolymer_), data::TargetType::RESTART_SOLUTION);
 
     if (!cFoam_.empty())
         sol.insert ("FOAM", UnitSystem::measure::identity, std::move(cFoam_), data::TargetType::RESTART_SOLUTION);
@@ -770,6 +776,10 @@ setRestart(const data::Solution& sol,
         effectiveWaterViscosityPolymer_[elemIdx] = sol.data("EWV_POL")[globalDofIndex];
     if (!mwPolymer_.empty() && sol.has("POLY_MW"))
         mwPolymer_[elemIdx] = sol.data("POLY_MW")[globalDofIndex];
+    if (!cellShearRatePolymer_.empty() && sol.has("POLSHEAR"))
+        cellShearRatePolymer_[elemIdx] = sol.data("POLSHEAR")[globalDofIndex];
+    if (!apparentViscosityPolymer_.empty() && sol.has("PAPPVISC"))
+        apparentViscosityPolymer_[elemIdx] = sol.data("PAPPVISC")[globalDofIndex];
     if (!cFoam_.empty() && sol.has("FOAM"))
         cFoam_[elemIdx] = sol.data("FOAM")[globalDofIndex];
     if (!cSalt_.empty() && sol.has("SALT"))
@@ -950,7 +960,14 @@ doAllocBuffers(unsigned bufferSize,
         if(enablePolymerMolarWeight_){
             mwPolymer_.resize(bufferSize, 0.0);
         }
-        else if(rstKeywords["VISC"] > 0){
+
+        const bool outputViscosityToRestart = rstKeywords["VISC"] > 0;
+        if (outputViscosityToRestart && enablePolymerMolarWeight_){
+            apparentViscosityPolymer_.resize(bufferSize, 0.0);
+            cellShearRatePolymer_.resize(bufferSize, 0.0);
+        }
+        else if(outputViscosityToRestart){
+            // Eclipse-model
             effectivePolymerViscosityPolymer_.resize(bufferSize, 0.0);
             effectiveMixtureViscosityPolymer_.resize(bufferSize, 0.0);
             effectiveWaterViscosityPolymer_.resize(bufferSize, 0.0);

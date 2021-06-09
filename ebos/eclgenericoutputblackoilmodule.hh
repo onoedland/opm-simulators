@@ -104,14 +104,6 @@ public:
         return 0;
     }
 
-    Scalar getPolymerMW(unsigned elemIdx) const
-    {
-        if (mwPolymer_.size() > elemIdx)
-            return mwPolymer_[elemIdx];
-
-        return 0;
-    }
-
     Scalar getEffectivePolymerViscosityPolymer(unsigned elemIdx) const
     {
         if (effectivePolymerViscosityPolymer_.size() > elemIdx)
@@ -132,6 +124,22 @@ public:
     {
         if (effectiveWaterViscosityPolymer_.size() > elemIdx)
             return effectiveWaterViscosityPolymer_[elemIdx];
+
+        return 0;
+    }
+
+    Scalar getPolymerMW(unsigned elemIdx) const
+    {
+        if (mwPolymer_.size() > elemIdx)
+            return mwPolymer_[elemIdx];
+
+        return 0;
+    }
+
+    Scalar getPolymerApparentViscosity(unsigned elemIdx) const
+    {
+        if (apparentViscosityPolymer_.size() > elemIdx)
+            return apparentViscosityPolymer_[elemIdx];
 
         return 0;
     }
@@ -364,10 +372,12 @@ protected:
     ScalarBuffer oilSaturationPressure_;
     ScalarBuffer sSol_;
     ScalarBuffer cPolymer_;
-    ScalarBuffer mwPolymer_;
     ScalarBuffer effectivePolymerViscosityPolymer_;
     ScalarBuffer effectiveMixtureViscosityPolymer_;
     ScalarBuffer effectiveWaterViscosityPolymer_;
+    ScalarBuffer mwPolymer_;
+    ScalarBuffer apparentViscosityPolymer_;
+    ScalarBuffer cellShearRatePolymer_;
     ScalarBuffer cFoam_;
     ScalarBuffer cSalt_;
     ScalarBuffer extboX_;
