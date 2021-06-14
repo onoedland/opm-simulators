@@ -149,6 +149,26 @@ namespace Opm
     }
 
 
+    template<typename TypeTag>
+    double
+    WellInterface<TypeTag>::
+    wpolymw() const
+    {
+        if constexpr (has_polymer && has_polymermw) {
+            auto injectorType = this->well_ecl_.injectorType();
+
+            if (injectorType == InjectorType::WATER && wpolymer() > 0.0) {
+                WellPolymerProperties polymer = this->well_ecl_.getPolymerProperties();
+                const double polymer_mw = polymer.m_polymerMoleWeight;
+                return polymer_mw;
+            } else {
+                // No polymer is injected via this well
+                return 0.0;
+            }
+        }
+        return 0.0;
+    }
+
 
 
 

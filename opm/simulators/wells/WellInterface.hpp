@@ -300,6 +300,8 @@ protected:
 
     double wpolymer() const;
 
+    double wpolymw() const;
+
     double wfoam() const;
 
     double wsalt() const;

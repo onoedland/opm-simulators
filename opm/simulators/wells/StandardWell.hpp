@@ -337,6 +337,7 @@ namespace Opm
         using Base::wsalt;
         using Base::wsolvent;
         using Base::wpolymer;
+        using Base::wpolymw;
         using Base::wfoam;
         using Base::scalingFactor;
         using Base::mostStrictBhpFromBhpLimits;

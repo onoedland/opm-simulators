@@ -3176,15 +3176,19 @@ namespace Opm
                DeferredLogger& deferred_logger) const
     {
         if constexpr (Base::has_polymermw) {
-            const int table_id = well_ecl_.getPolymerProperties().m_plymwinjtable;
-            const auto& table_func = PolymerModule::getPlymwinjTable(table_id);
-            const EvalWell throughput_eval(numWellEq_ + numEq, throughput);
+
             EvalWell molecular_weight(numWellEq_ + numEq, 0.);
             if (wpolymer() == 0.) { // not injecting polymer
                 return molecular_weight;
             }
+
+            // Compute molecular weight from 2D interpolation (PLYMWINJ)
+            const int table_id = well_ecl_.getPolymerProperties().m_plymwinjtable;
+            const auto& table_func = PolymerModule::getPlymwinjTable(table_id);
+            const EvalWell throughput_eval(numWellEq_ + numEq, throughput);
             molecular_weight = table_func.eval(throughput_eval, abs(water_velocity));
             return molecular_weight;
+
         } else {
             OPM_DEFLOG_THROW(std::runtime_error, "Polymermw is not activated, "
                                           "while injecting polymer molecular weight is requested for well " << name(), deferred_logger);
@@ -3438,20 +3442,30 @@ namespace Opm
     {
         // the source term related to transport of molecular weight
         EvalWell cq_s_polymw = cq_s_poly;
+
+        const auto& injectivityModel = PolymerModule::injectivityModel();
+
         if (this->isInjector()) {
             const int wat_vel_index = Bhp + 1 + perf;
             const EvalWell water_velocity = primary_variables_evaluation_[wat_vel_index];
-            if (water_velocity > 0.) { // injecting
+            if (water_velocity > 0. && injectivityModel == InjectivityModel::TableBased) { // injecting
                 const auto * perf_water_throughput = &well_state.perfThroughput()[this->first_perf_];
                 const double throughput = perf_water_throughput[perf];
+                // Mw as a function of throughput and water velocity (2D table interpolation)
                 const EvalWell molecular_weight = wpolymermw(throughput, water_velocity, deferred_logger);
                 cq_s_polymw *= molecular_weight;
-            } else {
+            }
+            else if(water_velocity > 0 && injectivityModel == InjectivityModel::None){ // injecting
+                // Read molecular weight from WPOLYMW keyword
+                cq_s_polymw *= EvalWell(numWellEq_ + numEq, wpolymw());
+            }
+            else {
                 // we do not consider the molecular weight from the polymer
                 // going-back to the wellbore through injector
                 cq_s_polymw *= 0.;
             }
-        } else if (this->isProducer()) {
+        }
+        else if (this->isProducer()) {
             if (cq_s_polymw < 0.) {
                 cq_s_polymw *= extendEval(int_quants.polymerMoleWeight() );
             } else {
