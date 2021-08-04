@@ -20,6 +20,7 @@
 */
 
 #include <opm/common/utility/numeric/RootFinders.hpp>
+#include <opm/common/utility/numeric/RootFindersEvaluation.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Well/WellInjectionProperties.hpp>
 #include <opm/simulators/utils/DeferredLoggingErrorHelpers.hpp>
 #include <opm/simulators/linalg/MatrixBlock.hpp>
@@ -598,7 +599,7 @@ namespace Opm
             std::vector<EvalWell> cq_s(num_components_, {numWellEq_ + numEq, 0.0});
             EvalWell water_flux_s{numWellEq_ + numEq, 0.0};
             EvalWell cq_s_zfrac_effective{numWellEq_ + numEq, 0.0};
-            calculateSinglePerf(ebosSimulator, perf, well_state, connectionRates, cq_s, water_flux_s, cq_s_zfrac_effective, deferred_logger);
+            calculateSinglePerf(ebosSimulator, perf, dt, well_state, connectionRates, cq_s, water_flux_s, cq_s_zfrac_effective, deferred_logger);
 
             // Equation assembly for this perforation.
             if constexpr (has_polymer && Base::has_polymermw) {
@@ -685,6 +686,7 @@ namespace Opm
     StandardWell<TypeTag>::
     calculateSinglePerf(const Simulator& ebosSimulator,
                         const int perf,
+                        const double dt,
                         WellState& well_state,
                         std::vector<RateVector>& connectionRates,
                         std::vector<EvalWell>& cq_s,
@@ -802,7 +804,7 @@ namespace Opm
             connectionRates[perf][contiPolymerEqIdx] = Base::restrictEval(cq_s_poly);
 
             if constexpr (Base::has_polymermw) {
-                updateConnectionRatePolyMW(cq_s_poly, intQuants, well_state, perf, connectionRates, deferred_logger);
+                updateConnectionRatePolyMW(dt, cq_s_poly, intQuants, ebosSimulator, well_state, perf, connectionRates, deferred_logger);
             }
         }
 
@@ -3198,6 +3200,323 @@ namespace Opm
 
 
 
+    template<typename TypeTag>
+    typename StandardWell<TypeTag>::EvalWell
+    StandardWell<TypeTag>::
+    wpolymermw_steady_state(const double well_radius,
+                            const double area_equivalent_radius,
+                            const Scalar& temperature,
+                            const Scalar& permeability,
+                            const Scalar& porosity,
+                            const EvalWell& muWater,
+                            const EvalWell& relWater,
+                            const EvalWell& Sw,
+                            unsigned pvtRegionIdx,
+                            const EvalWell& water_velocity,
+                            Opm::DeferredLogger& deferred_logger) const
+    {
+        if constexpr (Base::has_polymermw) {
+
+            if (wpolymer() == 0.0) { // not injecting polymer
+                return EvalWell(numWellEq_ + numEq, 0.0);
+            }
+
+            EvalWell injected_molecular_weight(numWellEq_ + numEq, wpolymw());
+
+            // TO DO: implement new function and call it here....
+            const EvalWell absWellVelocity = Opm::abs(water_velocity);
+            const Scalar absPermWell = permeability;
+
+            // TO DO: Get degradation rate constant parameters from the input...
+            const Scalar degr_rate_constant =  1.5e-6;
+            const Scalar degr_alpha = 3.0;
+            const Scalar degr_beta = 1.0;
+
+            // Effective pore radius for polymer:
+            const Scalar tortuosity_factor = 3.0;
+            const Scalar epva = 1.0;
+
+            EvalWell polymerConcentration(numWellEq_ + numEq, 0.0);
+            polymerConcentration.setValue(wpolymer());
+
+            const EvalWell rwp_numerator = 8.0*tortuosity_factor*absPermWell*relWater*epva;
+            const EvalWell rwp_denominator = Sw*porosity;
+            const EvalWell effective_pore_radius = Opm::sqrt(rwp_numerator / rwp_denominator);
+
+            const Scalar alphaFactor = PolymerModule::shrate(pvtRegionIdx);
+            const EvalWell shear_well = PolymerModule::computeWellShearRate(absWellVelocity,
+                                                                            absPermWell,
+                                                                            porosity,
+                                                                            Sw,
+                                                                            relWater,
+                                                                            alphaFactor);
+            //std::cout << "Shear_well=" << shear_well << "\n";
+            const EvalWell degr_rate_constant_prefactor = porosity * Opm::pow(well_radius*absWellVelocity, -1.0);
+
+            unsigned polymerMixRegionIdx = pvtRegionIdx; // QUESTION: Are these the same??
+
+            /* Calculate right-hand side of ODE dMw/dr = -f(Mw, r) */
+            auto f_dMw_dr = [&](const EvalWell& Mw, const Scalar r) {  // Mw in kg/mol
+
+                const EvalWell pre_factor = r*degr_rate_constant_prefactor;
+                const EvalWell shear_r = shear_well*well_radius / r;  // 1/sec
+
+                const EvalWell relativeViscosity = PolymerModule::calcRelativeViscosityPolymerMw(polymerConcentration,
+                                                                                                 Mw,
+                                                                                                 polymerMixRegionIdx,
+                                                                                                 shear_r,
+                                                                                                 muWater,
+                                                                                                 porosity,
+                                                                                                 temperature,
+                                                                                                 Sw,
+                                                                                                 relWater,
+                                                                                                 /*elongation=*/ true);
+
+                const EvalWell shear_stress = shear_r * muWater * relativeViscosity;
+                const EvalWell f_stress = Opm::pow(degr_rate_constant*shear_stress, degr_alpha);
+                const EvalWell f_area = 2.0*Opm::pow(effective_pore_radius, -1.0);; // unit: 1/m
+                const EvalWell f_rup = f_stress * f_area * Opm::pow(Mw, degr_beta);
+                const EvalWell dMw_dr = -pre_factor*f_rup*Mw;
+                /*
+                std::cout << "Mw=" << Mw << ", shear_r=" << shear_r << " 1/sec, appVisc=" << 1.0e3*muWater*relativeViscosity;
+                std::cout << ", Rpore=" << effective_pore_radius << ", Cpol=" << polymerConcentration;
+                std::cout << ", f_stress=" << f_stress << ", f_area=" << f_area;
+                std::cout << ", r=" << r <<  ", prefactor=" << pre_factor;
+                std::cout << ", f_rup=" << f_rup << "\n";
+                std::cout << "rhs=" << dMw_dr << "...\n";
+                */
+                return dMw_dr;
+            };
+
+            typedef Opm::EvaluationRegulaFalsi<EvalWell> RootFinder;
+
+            auto solve_backward_euler = [&](const EvalWell& initial_Mw, const Scalar radius, const Scalar dr)
+            {
+                auto nl_func = [&]
+                        (const EvalWell& Mw)
+                {
+                    const auto dMw_dr = f_dMw_dr(Mw, radius);  // Note: dMw_dr = -f_rup(Mw)*Mw
+                    return Mw - dMw_dr*dr - initial_Mw;
+                };
+
+                const EvalWell max_Mw(initial_Mw);
+                // TO DO: Check that this gives a lower bound!
+                const EvalWell min_Mw = max_Mw / (1.0 - dr*f_dMw_dr(max_Mw, radius));
+
+                const int max_iter = 100;
+                const double tolerance = 1.0e-9;
+                int no_iter = 0;
+                auto sol_Mw = RootFinder::solve(nl_func, min_Mw, max_Mw, max_iter, tolerance, no_iter);
+                return sol_Mw;
+            };
+
+            // Richardson extrapolation:
+            const Scalar omega = 0.9;
+            const Scalar rel_tol = 1.0e-4;
+            const Scalar abs_tol = 1.0e-5;
+
+            std::vector<Scalar> solution_radii = {well_radius};
+            std::vector<EvalWell> solution_molecular_weights = {1.0e3*injected_molecular_weight};
+
+            Scalar current_radius = well_radius;
+            const Scalar final_radius = area_equivalent_radius;
+
+            int noSteps = 0;
+            while(current_radius <= final_radius){
+
+                const auto initial_Mw = solution_molecular_weights.back();
+
+                const Scalar tol = abs_tol + rel_tol*initial_Mw.value();
+                Scalar toli = 1.0e10;  // start with a large tolerance to enter the while loop
+
+                // Declare variables that will be updated continually inside the while loop
+                Scalar next_step_size = 0.1;
+
+                Scalar step_size;
+                EvalWell Mw_one_large_step;
+                EvalWell Mw_intermediate;
+                EvalWell Mw_two_small_steps;
+
+                while(toli > tol){
+
+                    step_size = next_step_size;
+
+                    // TO DO: Check these values....
+                    Mw_one_large_step = solve_backward_euler(initial_Mw, current_radius + step_size, step_size);
+                    Mw_intermediate = solve_backward_euler(initial_Mw, current_radius + 0.5*step_size, 0.5*step_size);
+                    Mw_two_small_steps = solve_backward_euler(Mw_intermediate, current_radius + step_size, 0.5*step_size);
+
+                    toli = Opm::abs(Mw_one_large_step - Mw_two_small_steps).value();
+                    next_step_size = std::min(step_size*omega*std::pow(tol/toli, 0.5), final_radius-current_radius);
+
+                    noSteps += 3;
+                }
+                const EvalWell next_Mw = 2.0*Mw_two_small_steps - Mw_one_large_step;
+                current_radius += step_size;
+
+                solution_radii.push_back(current_radius);
+                solution_molecular_weights.push_back(next_Mw);
+            }
+
+            const EvalWell degraded_molecular_weight = 1.0e-3*solution_molecular_weights.back(); // kg/mol --> MDa
+            return degraded_molecular_weight;
+
+        } else {
+            OPM_DEFLOG_THROW(std::runtime_error, "Polymermw is not activated, "
+                                                 "while injecting polymer molecular weight is requested for well " << name(), deferred_logger);
+        }
+
+    }
+
+
+
+
+    template<typename TypeTag>
+    typename StandardWell<TypeTag>::EvalWell
+    StandardWell<TypeTag>::
+    wpolymermw_transient(const double dt,
+                         const double well_radius,
+                         const double perforation_length,
+                         const double area_equivalent_radius,
+                         const Scalar& temperature,
+                         const Scalar& permeability,
+                         const Scalar& porosity,
+                         const EvalWell& muWater,
+                         const EvalWell& relWater,
+                         const EvalWell& Sw,
+                         unsigned pvtRegionIdx,
+                         const EvalWell& water_velocity,
+                         Opm::DeferredLogger& deferred_logger) const
+    {
+
+        if constexpr (Base::has_polymermw) {
+
+            if (wpolymer() == 0.0) { // not injecting polymer
+                return EvalWell(numWellEq_ + numEq, 0.0);
+            }
+
+            const EvalWell injected_molecular_weight(numWellEq_ + numEq, wpolymw()); // MDa
+
+            const EvalWell absWellVelocity = Opm::abs(water_velocity);
+            const Scalar absPermWell = permeability;
+
+            // TO DO: Get degradation rate constant parameters from the input...
+            const Scalar degr_rate_constant = 1.5e-6;
+            const Scalar degr_alpha = 3.0;
+            const Scalar degr_beta = 1.0;
+
+            // Effective pore radius for polymer:
+            const Scalar tortuosity_factor = 3.0;
+            const Scalar epva = 1.0;
+
+            EvalWell polymerConcentration(numWellEq_ + numEq, 0.0);
+            polymerConcentration.setValue(wpolymer());
+
+            const EvalWell rwp_numerator = 8.0 * tortuosity_factor * absPermWell * relWater * epva;
+            const EvalWell rwp_denominator = Sw * porosity;
+            const EvalWell effective_pore_radius = Opm::sqrt(rwp_numerator / rwp_denominator);
+
+            const Scalar alphaFactor = PolymerModule::shrate(pvtRegionIdx);
+            const EvalWell shear_well = PolymerModule::computeWellShearRate(absWellVelocity, absPermWell, porosity, Sw, relWater, alphaFactor);
+            const EvalWell degr_rate_constant_prefactor = porosity * Opm::pow(well_radius * absWellVelocity, -1.0);
+
+            unsigned polymerMixRegionIdx = pvtRegionIdx;
+
+            const Scalar rw = well_radius;
+            const Scalar re = area_equivalent_radius;
+            const Scalar well_area = 2.0 * M_PI * perforation_length * rw; // m^2
+
+            // TO DO: Move elsewhere (only need to calc. once)
+            const Scalar volume_increment_factor = 1.5;
+            const Scalar initial_dr = 0.01;
+
+            // ***************************************************************************************************
+            // TO DO: In actual simulations, should store this somewhere during initialization, to avoid costly
+            // re-calculating each time step..
+            std::vector<Scalar> bounding_radii = { rw, rw + initial_dr };
+            Scalar VdR = volume_increment_factor*(bounding_radii[1]*bounding_radii[1] - bounding_radii[0]*bounding_radii[0]);
+
+            int k = 1;
+            do
+            {
+                k++;
+                const Scalar prev_point = bounding_radii[k-1];
+                const Scalar next_point = Opm::sqrt(prev_point * prev_point + VdR);
+                bounding_radii.push_back(next_point);
+                VdR *= volume_increment_factor;
+            } while (bounding_radii[k] < 0.5 * (rw + re) * 1.2 && bounding_radii[k] < re * 0.9);
+
+            const Scalar r_prev = bounding_radii.back();
+            bounding_radii.push_back(re);
+            // ***************************************************************************************************
+            const EvalWell initial_Mw = 1.0e3*injected_molecular_weight; // kg/mol
+
+            EvalWell apparent_viscosity_weighted_sum;
+
+            auto non_linear_function = [&](const EvalWell& Mw)
+            {
+                apparent_viscosity_weighted_sum = EvalWell(numWellEq_ + numEq, 0.);
+                EvalWell frup_weighted_sum(numWellEq_ + numEq, 0.);
+
+                for (auto lowerIdx = 0; lowerIdx < bounding_radii.size() - 1; ++lowerIdx)
+                {
+                    const Scalar lower_radius = bounding_radii[lowerIdx];
+                    const Scalar upper_radius = bounding_radii[lowerIdx + 1];
+                    const Scalar midpoint_radius = 0.5*(lower_radius + upper_radius);
+
+                    const EvalWell shear_r = shear_well * rw / midpoint_radius;
+                    const EvalWell eta_rel = PolymerModule::calcRelativeViscosityPolymerMw(polymerConcentration,
+                                                                                           Mw,
+                                                                                           polymerMixRegionIdx,
+                                                                                           shear_r,
+                                                                                           muWater,
+                                                                                           porosity,
+                                                                                           temperature,
+                                                                                           Sw,
+                                                                                           relWater,
+                                                                                           /*elongation=*/ true);
+                    const EvalWell eta_r = muWater * eta_rel;
+                    const EvalWell shear_stress = shear_r*eta_r;
+
+                    apparent_viscosity_weighted_sum += eta_r * Opm::log(upper_radius / lower_radius);
+
+                    const EvalWell f_stress = Opm::pow(shear_stress*degr_rate_constant, degr_alpha);
+                    const EvalWell f_area = 2.0 * Opm::pow(effective_pore_radius, -1.0); // unit: 1/m
+                    const EvalWell f_rup = f_stress * f_area * Opm::pow(Mw, degr_beta);
+
+                    frup_weighted_sum += f_rup * (upper_radius * upper_radius - lower_radius * lower_radius);
+                    //std::cout << "r_l=" << lower_radius << ", r_u=" << upper_radius << ", shear_k=" << shear_r << ", eta_k=" << 1.0e3*eta_r;
+                    //std::cout << " mPas, f_stress=" << f_stress << ", f_area=" << f_area << ", f_rup_k=" << f_rup << "\n";
+
+                }
+
+                // CRITICAL TO DO: Check!!
+                const EvalWell frup_effective = frup_weighted_sum / (re * re - rw * rw);
+                const EvalWell expr = Mw * (1.0 + dt * frup_effective * Mw);
+                //std::cout << "Current residual: g(M)=" << expr << " - " << initial_Mw.value() << " = 0.\n";
+                return Mw * (1.0 + dt * frup_effective * Mw) - initial_Mw;
+            };
+
+            typedef Opm::EvaluationRegulaFalsi<EvalWell> RootFinder;
+
+            const EvalWell max_Mw = initial_Mw;
+            const EvalWell min_Mw(numWellEq_ + numEq, 0.);
+
+            int no_iter = 0;
+            const EvalWell sol_Mw = RootFinder::solve(non_linear_function, min_Mw, max_Mw, 1000, 1.0e-7, no_iter);
+            // TO DO: Must add contribution to well pressure somehow... (either via skin, or modify cell viscosity?)
+            const EvalWell apparent_viscosity = apparent_viscosity_weighted_sum / Opm::log(re / rw);
+            //std::cout << "eta_app_well=" << 1.0e3*apparent_viscosity << " mPas, Mw_avg=" << 1.0e-3*sol_Mw << " MDa...\n";
+            return 1.0e-3*sol_Mw;
+
+            } else{
+                OPM_DEFLOG_THROW(std::runtime_error, "Polymermw is not activated, "
+                                                 "while injecting polymer molecular weight is requested for well " << name(), deferred_logger);
+            }
+    }
+
+
+
 
     template<typename TypeTag>
     void
@@ -3433,8 +3752,10 @@ namespace Opm
     template<typename TypeTag>
     void
     StandardWell<TypeTag>::
-    updateConnectionRatePolyMW(const EvalWell& cq_s_poly,
+    updateConnectionRatePolyMW(const double dt,
+                               const EvalWell& cq_s_poly,
                                const IntensiveQuantities& int_quants,
+                               const Simulator& ebosSimulator,
                                const WellState& well_state,
                                const int perf,
                                std::vector<RateVector>& connectionRates,
@@ -3446,23 +3767,73 @@ namespace Opm
         const auto& injectivityModel = PolymerModule::injectivityModel();
 
         if (this->isInjector()) {
+
             const int wat_vel_index = Bhp + 1 + perf;
             const EvalWell water_velocity = primary_variables_evaluation_[wat_vel_index];
-            if (water_velocity > 0. && injectivityModel == InjectivityModel::TableBased) { // injecting
-                const auto * perf_water_throughput = &well_state.perfThroughput()[this->first_perf_];
-                const double throughput = perf_water_throughput[perf];
-                // Mw as a function of throughput and water velocity (2D table interpolation)
-                const EvalWell molecular_weight = wpolymermw(throughput, water_velocity, deferred_logger);
-                cq_s_polymw *= molecular_weight;
-            }
-            else if(water_velocity > 0 && injectivityModel == InjectivityModel::None){ // injecting
-                // Read molecular weight from WPOLYMW keyword
-                cq_s_polymw *= EvalWell(numWellEq_ + numEq, wpolymw());
-            }
-            else {
+
+            if(water_velocity <= 0.0){
                 // we do not consider the molecular weight from the polymer
                 // going-back to the wellbore through injector
                 cq_s_polymw *= 0.;
+            }
+            // injecting
+            else if(injectivityModel == InjectivityModel::None){
+                cq_s_polymw *= EvalWell(numWellEq_ + numEq, wpolymw());
+            }
+            else if (injectivityModel == InjectivityModel::TableBased) {
+                const auto * perf_water_throughput = &well_state.perfThroughput()[this->first_perf_];
+                const double throughput = perf_water_throughput[perf];
+                const EvalWell molecular_weight = wpolymermw(throughput, water_velocity, deferred_logger);
+                cq_s_polymw *= molecular_weight;
+            }
+            else if(injectivityModel == InjectivityModel::ODEBasedSteadyState || injectivityModel == InjectivityModel::ODEBasedTimeDependent){
+
+                const auto water_phase_idx = FluidSystem::waterPhaseIdx;
+                const double well_radius = 0.5*bore_diameters_[perf];
+                const double perforation_length = perf_length_[perf];
+                // perf_rep_radius is equal to sqrt(re*rw):
+                const double area_equivalent_radius = perf_rep_radius_[perf]*perf_rep_radius_[perf]/well_radius;
+                const EvalWell relWater(numWellEq_ + numEq, 1.0); // TO DO: Get rel. perm. also...
+                const EvalWell muWater = extendEval(int_quants.fluidState().viscosity(water_phase_idx));
+                const EvalWell poro = extendEval(int_quants.porosity());
+                const EvalWell Sw = extendEval(int_quants.fluidState().saturation(water_phase_idx));
+                const Scalar temperature = this->well_ecl_.temperature();
+
+                const int cell_idx = well_cells_[perf];
+                const auto& permeability_tensor = ebosSimulator.problem().intrinsicPermeability(cell_idx);
+                const auto& Kx = permeability_tensor[0][0];  // TO DO: generalize...
+
+                if(injectivityModel == InjectivityModel::ODEBasedSteadyState) {
+                    const EvalWell molecular_weight = wpolymermw_steady_state(well_radius,
+                                                                              area_equivalent_radius,
+                                                                              temperature,
+                                                                              Kx,
+                                                                              poro.value(),
+                                                                              muWater,
+                                                                              relWater,
+                                                                              Sw,
+                                                                              int_quants.pvtRegionIndex(),
+                                                                              water_velocity,
+                                                                              deferred_logger);
+                    cq_s_polymw *= molecular_weight;
+                }
+
+                else if(injectivityModel == InjectivityModel::ODEBasedTimeDependent){
+                    const EvalWell molecular_weight = wpolymermw_transient(dt,
+                                                                           well_radius,
+                                                                           perforation_length,
+                                                                           area_equivalent_radius,
+                                                                           temperature,
+                                                                           Kx,
+                                                                           poro.value(),
+                                                                           muWater,
+                                                                           relWater,
+                                                                           Sw,
+                                                                           int_quants.pvtRegionIndex(),
+                                                                           water_velocity,
+                                                                           deferred_logger);
+                    cq_s_polymw *= molecular_weight;
+                }
             }
         }
         else if (this->isProducer()) {

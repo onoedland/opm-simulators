@@ -545,6 +545,7 @@ namespace Opm
 
         void calculateSinglePerf(const Simulator& ebosSimulator,
                                  const int perf,
+                                 const double dt,
                                  WellState& well_state,
                                  std::vector<RateVector>& connectionRates,
                                  std::vector<EvalWell>& cq_s,
@@ -604,10 +605,38 @@ namespace Opm
                             const EvalWell& water_velocity,
                             DeferredLogger& deferred_logger) const;
 
-        // calculate the injecting polymer molecular weight based on the througput and water velocity
+        // calculate the injected polymer molecular weight based on the throughput and water velocity
         EvalWell wpolymermw(const double throughput,
                             const EvalWell& water_velocity,
                             DeferredLogger& deferred_logger) const;
+
+        // calculate the injected polymer molecular weight from solution to steady-state ODE
+        EvalWell wpolymermw_steady_state(const double well_radius,
+                                         const double area_equivalent_radius,
+                                         const Scalar& temperature,
+                                         const Scalar& permeability,
+                                         const Scalar& porosity,
+                                         const EvalWell& muWater,
+                                         const EvalWell& relWater,
+                                         const EvalWell& Sw,
+                                         unsigned pvtRegionIdx,
+                                         const EvalWell& water_velocity,
+                                         Opm::DeferredLogger& deferred_logger) const;
+
+        // calculate the injected polymer molecular weight from solution to time-dependent ODE
+        EvalWell wpolymermw_transient(const double dt,
+                                      const double well_radius,
+                                      const double perforation_length,
+                                      const double area_equivalent_radius,
+                                      const Scalar& temperature,
+                                      const Scalar& permeability,
+                                      const Scalar& porosity,
+                                      const EvalWell& muWater,
+                                      const EvalWell& relWater,
+                                      const EvalWell& Sw,
+                                      unsigned pvtRegionIdx,
+                                      const EvalWell& water_velocity,
+                                      Opm::DeferredLogger& deferred_logger) const;
 
         // modify the water rate for polymer injectivity study
         void handleInjectivityRate(const Simulator& ebosSimulator,
@@ -633,8 +662,10 @@ namespace Opm
                                       ConvergenceReport& report) const;
 
         // updating the connectionRates_ related polymer molecular weight
-        void updateConnectionRatePolyMW(const EvalWell& cq_s_poly,
+        void updateConnectionRatePolyMW(const double dt,
+                                        const EvalWell& cq_s_poly,
                                         const IntensiveQuantities& int_quants,
+                                        const Simulator& ebosSimulator,
                                         const WellState& well_state,
                                         const int perf,
                                         std::vector<RateVector>& connectionRates,
